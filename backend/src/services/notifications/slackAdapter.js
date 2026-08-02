@@ -32,6 +32,14 @@ function buildThreadRef() {
   return `slack-${crypto.randomBytes(6).toString("hex")}`;
 }
 
+// Real Slack message timestamps look like "1785692127.508729". Incidents
+// posted before SLACK_BOT_TOKEN was configured got a placeholder ref from
+// buildThreadRef() instead (e.g. "slack-b21b6b8217a5") — that's not a valid
+// thread_ts, so Slack rejects it. Only thread onto ones that actually match.
+function isRealTs(ref) {
+  return /^\d+\.\d+$/.test(ref || "");
+}
+
 function formatOutboundMessage(incident) {
   return [
     `*[${(incident.severity || "unknown").toUpperCase()}] ${incident.errorType}* in *${incident.service}*`,
@@ -56,7 +64,7 @@ async function sendMessage({ channel, text, threadRef }) {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json; charset=utf-8",
     },
-    body: JSON.stringify({ channel: target, text, thread_ts: threadRef || undefined }),
+    body: JSON.stringify({ channel: target, text, thread_ts: isRealTs(threadRef) ? threadRef : undefined }),
   });
   const data = await res.json();
   if (!data.ok) throw new Error(`Slack API error: ${data.error}`);
